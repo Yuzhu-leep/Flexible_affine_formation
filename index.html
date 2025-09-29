@@ -3,12 +3,83 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Video</title>
-<body style="margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;background:#111">
-  <video controls playsinline preload="metadata"
-         style="width:100%;max-width:720px;outline:none;background:#000"
-         poster="cover.jpg">
-    <source src="video.mp4" type="video/mp4">
-    您的浏览器不支持 video 标签。
-  </video>
+<style>
+  body{margin:0;background:#0b0b0b;color:#eee;font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto}
+  .wrap{max-width:860px;margin:0 auto;padding:16px}
+  .card{background:#161616;border-radius:14px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .btn{display:inline-block;padding:10px 14px;border-radius:10px;border:1px solid #333;text-decoration:none;color:#eee}
+  code{background:#222;padding:2px 6px;border-radius:6px}
+  .warn{color:#ffcc66}
+  .err{color:#ff6b6b}
+</style>
+<body>
+<div class="wrap">
+  <h1>视频播放页（诊断版）</h1>
+  <div class="card">
+    <video id="v" controls playsinline preload="metadata"
+           style="width:100%;background:#000;border-radius:10px" poster="cover.jpg">
+      <!-- TODO-1：如果视频在同目录，保持相对路径；若用 Releases 直链，请替换为 Releases URL -->
+      <source id="src" src="video.mp4" type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"'>
+      您的浏览器不支持 video 标签。
+    </video>
+    <div class="row">
+      <!-- 直连/下载备用：可快速判断是否权限/带宽/跨域问题 -->
+      <a class="btn" id="dl" href="video.mp4" target="_blank" rel="noopener">打不开？点此直连/下载</a>
+      <a class="btn" href="?v="+Date.now()>缓存不生效？点我刷新</a>
+    </div>
+    <div id="log" style="margin-top:10px;white-space:pre-wrap"></div>
+    <p class="warn">提示：iOS 如需自动播放，请保持静音（muted）且 playsinline；本页默认手动播放。</p>
+  </div>
+
+  <h2>快速自检</h2>
+  <ol>
+    <li>用无痕窗口直接开 <code id="absLink"></code> 看是否能下载/播放。</li>
+    <li>打开开发者工具 → Network → 点击 <code>video.mp4</code>，检查：
+      <ul>
+        <li>状态码应为 <code>200/206</code>，不是 <code>302→login</code> / <code>404</code>。</li>
+        <li><code>Content-Type</code> 应为 <code>video/mp4</code>。</li>
+      </ul>
+    </li>
+    <li>若报解码失败，按下方 ffmpeg 命令重压。</li>
+  </ol>
+
+  <h2>ffmpeg 重压（保证兼容 & 快启）</h2>
+  <pre><code>ffmpeg -i input.xxx -c:v libx264 -profile:v high -level 4.0 -pix_fmt yuv420p \
+       -b:v 3000k -maxrate 4000k -bufsize 6000k \
+       -c:a aac -b:a 128k -movflags +faststart output.mp4</code></pre>
+</div>
+
+<script>
+  const v = document.getElementById('v');
+  const s = document.getElementById('src');
+  const log = document.getElementById('log');
+  const abs = new URL(s.getAttribute('src'), location.href).href;
+  document.getElementById('dl').href = abs;
+  document.getElementById('absLink').textContent = abs;
+
+  function append(msg, cls){ 
+    const p = document.createElement('div'); 
+    if (cls) p.className = cls;
+    p.textContent = msg; 
+    log.appendChild(p); 
+  }
+
+  v.addEventListener('error', () => {
+    const e = v.error;
+    const map = {
+      1: 'MEDIA_ERR_ABORTED：用户中止或浏览器取消加载',
+      2: 'MEDIA_ERR_NETWORK：网络错误（可能 404/302/超时/CORS）',
+      3: 'MEDIA_ERR_DECODE：解码失败（编码/损坏/不被支持）',
+      4: 'MEDIA_ERR_SRC_NOT_SUPPORTED：资源/类型不被支持或跨域'
+    };
+    append('[Video Error] code=' + (e && e.code) + ' → ' + (e && map[e.code] || '未知'), 'err');
+    append('请在 Network 面板查看 ' + abs + ' 的状态码与 Content-Type。', 'warn');
+  });
+
+  v.addEventListener('loadedmetadata', () => {
+    append('已加载元数据：时长 ' + (v.duration>0? v.duration.toFixed(1)+'s' : '未知'));
+  });
+</script>
 </body>
 </html>
